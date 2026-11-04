@@ -1,4 +1,4 @@
-name: Keep Streamlit app awake
+name: Keep Streamlit apps awake
 
 on:
   schedule:
@@ -18,26 +18,31 @@ jobs:
           pip install playwright
           playwright install --with-deps chromium
 
-      - name: Visit app
+      - name: Visit apps
         env:
-          APP_URL: ${{ secrets.APP_URL }}
+          APP_URLS: ${{ secrets.APP_URLS }}
         run: |
           python - <<'EOF'
           import os
           from playwright.sync_api import sync_playwright
 
-          url = os.environ["APP_URL"]
+          urls = [u.strip() for u in os.environ["APP_URLS"].split(",") if u.strip()]
           with sync_playwright() as p:
               browser = p.chromium.launch()
-              page = browser.new_page()
-              page.goto(url, wait_until="domcontentloaded", timeout=60000)
-              try:
-                  page.get_by_role(
-                      "button", name="Yes, get this app back up!"
-                  ).click(timeout=10000)
-                  print("App was asleep, wake button clicked")
-              except Exception:
-                  print("App already awake")
-              page.wait_for_timeout(30000)
+              for url in urls:
+                  page = browser.new_page()
+                  try:
+                      page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                      try:
+                          page.get_by_role(
+                              "button", name="Yes, get this app back up!"
+                          ).click(timeout=10000)
+                          print(f"{url}: was asleep, wake button clicked")
+                      except Exception:
+                          print(f"{url}: already awake")
+                      page.wait_for_timeout(30000)
+                  except Exception as e:
+                      print(f"{url}: FAILED - {e}")
+                  page.close()
               browser.close()
           EOF
